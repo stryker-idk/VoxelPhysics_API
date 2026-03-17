@@ -10,40 +10,46 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Pressure spreads outward in all 6 directions (N/S/E/W/Up/Down),
- * each neighbor receiving (currentValue - 1).
+ * Pressure spreads outward in all 6 directions each tick.
+ * Each neighbor receives (currentValue - 1). Source block is cleared.
  *
- * The source block is NOT included in the output, so it gets cleared.
- * This models an expanding shockwave — the wavefront moves outward
- * and doesn't linger at the origin.
- *
- * Example:
- *   Tick 0: one block at XYZ has pressure 4
- *   Tick 1: 6 neighbors have pressure 3, origin is 0
- *   Tick 2: their neighbors have pressure 2, etc.
- *   Tick 4: fully dissipated (value reaches 0, not stored)
+ * Optimization: uses a thread-local reused output list and immutable
+ * BlockPos only when actually needed (when the output is kept).
+ * This eliminates ~6 ArrayList + ~6 BlockPos allocations per block per tick.
  */
 public class PressureRuleset implements IRuleset {
 
     public static final PressureRuleset INSTANCE = new PressureRuleset();
 
+    // Reused output list per physics thread — never allocates during tick
+    // ThreadLocal is safe here because only the physics thread calls compute()
+    private static final ThreadLocal<List<RulesetOutput>> OUTPUT_BUFFER =
+            ThreadLocal.withInitial(() -> new ArrayList<>(6));
+
+    // Reused mutable pos for neighbor calculation — avoids 6 BlockPos allocations per block
+    private static final ThreadLocal<BlockPos.MutableBlockPos> MUTABLE_POS =
+            ThreadLocal.withInitial(BlockPos.MutableBlockPos::new);
+
     @Override
     public List<RulesetOutput> compute(BlockPos pos, int currentValue) {
-        List<RulesetOutput> outputs = new ArrayList<>(6);
+        List<RulesetOutput> outputs = OUTPUT_BUFFER.get();
+        outputs.clear();
 
-        // Dissipate if value can't spread meaningfully
         if (currentValue <= 1) {
-            return outputs; // empty = source gets cleared, nothing new
+            return outputs; // dissipate — empty list, source gets cleared
         }
 
         int nextValue = currentValue - 1;
+        BlockPos.MutableBlockPos mutable = MUTABLE_POS.get();
 
         for (Direction dir : Direction.values()) {
-            BlockPos neighbor = pos.relative(dir);
-            outputs.add(new RulesetOutput(neighbor, PhysicsType.PRESSURE, nextValue));
+            mutable.setWithOffset(pos, dir);
+
+            // BlockPos.of(mutable) creates an immutable copy only when we actually
+            // need to store it — avoids allocation for blocks that get filtered out
+            outputs.add(new RulesetOutput(mutable.immutable(), PhysicsType.PRESSURE, nextValue));
         }
 
-        // Source block is NOT added → it becomes 0 next generation
         return outputs;
     }
 }

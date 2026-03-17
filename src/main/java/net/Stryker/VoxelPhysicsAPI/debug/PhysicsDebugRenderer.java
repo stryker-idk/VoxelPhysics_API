@@ -1,7 +1,7 @@
 package net.Stryker.VoxelPhysicsAPI.debug;
 
+import net.Stryker.VoxelPhysicsAPI.PhysicsThreadManager;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType;
-import net.Stryker.VoxelPhysicsAPI.WorldPhysicsManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -11,27 +11,30 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.Map;
+
 /**
- * DEBUG ONLY — spawns particles at every block with non-zero pressure.
+ * DEBUG ONLY — spawns particles for every block with non-zero pressure.
  *
- * Particle type scales with pressure value:
- *   Low  (1–10)  → single wisp of smoke
+ * Reads from PhysicsThreadManager's render snapshot — a periodic copy of the
+ * live data published by the physics thread. The renderer never touches live
+ * hashmaps, so there's no thread contention here.
+ *
+ * Particle type scales with pressure:
+ *   Low  (1–10)  → single smoke wisp
  *   Mid  (11–30) → small poof cloud
  *   High (31+)   → explosion particle
  *
- * Toggle on/off at runtime with:
- *   PhysicsDebugRenderer.DEBUG_ENABLED = true/false;
- * Or hook it up to a keybind / command.
- *
- * CLIENT SIDE ONLY.
+ * Toggle: /vpdebug toggle
  */
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PhysicsDebugRenderer {
 
     public static boolean DEBUG_ENABLED = false;
 
-    // Spawn particles every N ticks, not every tick — avoids particle spam
-    private static final int RENDER_INTERVAL = 5;
+    // Render every N client ticks — the snapshot itself updates at SNAPSHOT_INTERVAL
+    // physics ticks, so rendering faster than that is pointless
+    private static final int RENDER_INTERVAL = 4;
     private static int tickCounter = 0;
 
     @SubscribeEvent
@@ -46,16 +49,14 @@ public class PhysicsDebugRenderer {
         ClientLevel level = mc.level;
         if (level == null) return;
 
-        // NOTE: This works in singleplayer because client and server share the JVM.
-        // For multiplayer you'd need to sync active block data via packets instead.
-        WorldPhysicsManager wpm = WorldPhysicsManager.get(level.dimension());
+        // Read from the snapshot — safe to access from any thread
+        PhysicsThreadManager.RenderSnapshot snapshot = PhysicsThreadManager.get().getRenderSnapshot();
+        Map<BlockPos, int[]> dimData = snapshot.data().get(level.dimension());
+        if (dimData == null) return;
 
-        wpm.getChunkManagers().forEach((chunkPos, chunkManager) -> {
-            chunkManager.forEachActiveBlock((pos, values) -> {
-                int pressure = values[PhysicsType.PRESSURE.index];
-                if (pressure <= 0) return;
-                spawnPressureParticle(level, pos, pressure);
-            });
+        dimData.forEach((pos, values) -> {
+            int pressure = values[PhysicsType.PRESSURE.index];
+            if (pressure > 0) spawnPressureParticle(level, pos, pressure);
         });
     }
 
@@ -65,11 +66,8 @@ public class PhysicsDebugRenderer {
         double z = pos.getZ() + 0.5;
 
         if (pressure >= 31) {
-            // High pressure — one big explosion poof
             level.addParticle(ParticleTypes.EXPLOSION, x, y, z, 0, 0, 0);
-
         } else if (pressure >= 11) {
-            // Mid pressure — small smoke cloud, density scales with value
             int count = Math.max(1, pressure / 5);
             for (int i = 0; i < count; i++) {
                 double jitter = 0.2;
@@ -80,7 +78,6 @@ public class PhysicsDebugRenderer {
                         0, 0.05, 0);
             }
         } else {
-            // Low pressure — a single wisp of smoke drifting upward
             level.addParticle(ParticleTypes.SMOKE, x, y + 0.3, z, 0, 0.02, 0);
         }
     }

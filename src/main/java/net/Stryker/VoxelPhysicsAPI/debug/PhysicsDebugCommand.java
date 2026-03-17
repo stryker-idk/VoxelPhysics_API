@@ -2,29 +2,24 @@ package net.Stryker.VoxelPhysicsAPI.debug;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.Stryker.VoxelPhysicsAPI.PhysicsThreadManager;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType;
-import net.Stryker.VoxelPhysicsAPI.WorldPhysicsManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
- * Registers the /vpdebug command for testing the physics simulation.
+ * /vpdebug command — seeds and inspects the physics simulation.
  *
  * Usage:
- *   /vpdebug pressure <value>   — seeds pressure at your current block position
- *   /vpdebug toggle             — toggles the particle debug visualizer on/off
- *   /vpdebug clear              — clears all physics data in loaded chunks
- *
- * Example workflow:
- *   /vpdebug toggle             — turn on particles first
- *   /vpdebug pressure 32        — seed a shockwave, watch it expand
+ *   /vpdebug pressure <0-255>   — seed pressure at your feet
+ *   /vpdebug toggle             — toggle particle visualizer
+ *   /vpdebug clear              — wipe all physics data in loaded chunks
  */
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PhysicsDebugCommand {
@@ -35,9 +30,8 @@ public class PhysicsDebugCommand {
 
         dispatcher.register(
             Commands.literal("vpdebug")
-                .requires(source -> source.hasPermission(2)) // requires op level 2
+                .requires(source -> source.hasPermission(2))
 
-                // /vpdebug pressure <0-255>
                 .then(Commands.literal("pressure")
                     .then(Commands.argument("value", IntegerArgumentType.integer(0, 255))
                         .executes(ctx -> setPressure(
@@ -47,12 +41,10 @@ public class PhysicsDebugCommand {
                     )
                 )
 
-                // /vpdebug toggle
                 .then(Commands.literal("toggle")
                     .executes(ctx -> toggleVisualizer(ctx.getSource()))
                 )
 
-                // /vpdebug clear
                 .then(Commands.literal("clear")
                     .executes(ctx -> clearAll(ctx.getSource()))
                 )
@@ -64,16 +56,18 @@ public class PhysicsDebugCommand {
     private static int setPressure(CommandSourceStack source, int value) {
         try {
             ServerPlayer player = source.getPlayerOrException();
-            ServerLevel level = player.serverLevel();
             BlockPos pos = player.blockPosition();
 
-            WorldPhysicsManager.get(level.dimension())
-                    .setBlockValue(pos, PhysicsType.PRESSURE, value);
+            // Feed into the queue — physics thread picks it up next tick
+            PhysicsThreadManager.get().seed(
+                player.serverLevel().dimension(),
+                pos,
+                PhysicsType.PRESSURE,
+                value
+            );
 
             source.sendSuccess(
-                () -> Component.literal(
-                    "[VoxelPhysics] pressure=" + value + " set at " + formatPos(pos)
-                ),
+                () -> Component.literal("[VoxelPhysics] pressure=" + value + " queued at " + formatPos(pos)),
                 false
             );
             return 1;
@@ -97,14 +91,10 @@ public class PhysicsDebugCommand {
     private static int clearAll(CommandSourceStack source) {
         try {
             ServerPlayer player = source.getPlayerOrException();
-            ServerLevel level = player.serverLevel();
-            WorldPhysicsManager wpm = WorldPhysicsManager.get(level.dimension());
 
-            // Re-register each chunk — replaces its hashmap with a fresh empty one
-            wpm.getChunkManagers().forEach((chunkPos, manager) -> {
-                wpm.unregisterChunk(chunkPos.x, chunkPos.z);
-                wpm.registerChunk(chunkPos.x, chunkPos.z);
-            });
+            // Feeds the clearQueue — physics thread zeroes all hashmaps next tick.
+            // Chunk registrations stay intact, so simulation resumes immediately.
+            PhysicsThreadManager.get().clearDimension(player.serverLevel().dimension());
 
             source.sendSuccess(
                 () -> Component.literal("[VoxelPhysics] Cleared all physics data."),

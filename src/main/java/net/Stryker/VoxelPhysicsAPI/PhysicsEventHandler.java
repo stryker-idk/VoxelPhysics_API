@@ -2,85 +2,70 @@ package net.Stryker.VoxelPhysicsAPI;
 
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 
 /**
- * Hooks into Forge's event system to:
- *   - Tick the physics simulation every server tick
- *   - Register/unregister ChunkPhysicsManagers as chunks load/unload
- *   - Clean up WorldPhysicsManagers when a dimension unloads
+ * Hooks into Forge events and feeds the PhysicsThreadManager's queues.
  *
- * We only run on the SERVER side (isClientSide() == false).
- * Physics is purely server-side data — rendering effects are separate.
+ * The main thread NEVER ticks the simulation directly anymore.
+ * It only posts events into lock-free queues that the physics thread drains.
+ *
+ * TickEvent is gone — the physics thread manages its own clock.
  */
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PhysicsEventHandler {
 
-    /**
-     * Tick the physics simulation.
-     * We use Phase.END so that all block updates from this tick have settled first.
-     */
+    /** Start the physics thread when the server starts. */
     @SubscribeEvent
-    public static void onLevelTick(TickEvent.LevelTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        if (event.level.isClientSide()) return;
-
-        WorldPhysicsManager.get(event.level.dimension()).tick();
+    public static void onServerStarting(ServerStartingEvent event) {
+        PhysicsThreadManager.get().start();
     }
 
-    /**
-     * Register a new ChunkPhysicsManager when a chunk loads.
-     */
+    /** Stop the physics thread cleanly when the server shuts down. */
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        PhysicsThreadManager.get().stop();
+    }
+
+    /** Tell the physics thread a chunk is available for simulation. */
     @SubscribeEvent
     public static void onChunkLoad(ChunkEvent.Load event) {
         if (!(event.getLevel() instanceof Level level)) return;
         if (level.isClientSide()) return;
 
         ChunkAccess chunk = event.getChunk();
-        WorldPhysicsManager.get(level.dimension())
-                .registerChunk(chunk.getPos().x, chunk.getPos().z);
+        PhysicsThreadManager.get().onChunkLoad(
+            level.dimension(),
+            chunk.getPos().x,
+            chunk.getPos().z
+        );
     }
 
-    /**
-     * Unregister the ChunkPhysicsManager when a chunk unloads.
-     * Any pending overflow targeting this chunk will be discarded until it reloads.
-     */
+    /** Tell the physics thread to drop a chunk — its data is lost until it reloads. */
     @SubscribeEvent
     public static void onChunkUnload(ChunkEvent.Unload event) {
         if (!(event.getLevel() instanceof Level level)) return;
         if (level.isClientSide()) return;
 
         ChunkAccess chunk = event.getChunk();
-        WorldPhysicsManager.get(level.dimension())
-                .unregisterChunk(chunk.getPos().x, chunk.getPos().z);
+        PhysicsThreadManager.get().onChunkUnload(
+            level.dimension(),
+            chunk.getPos().x,
+            chunk.getPos().z
+        );
     }
 
-
-// ... (existing imports unchanged)
-
-    /**
-     * DEBUG: When you break any block, seed pressure 32 at that position.
-     * Remove this once you're done testing.
-     */
-    @SubscribeEvent
-    public static void onBlockBreak(BlockEvent.BreakEvent event) {
-        if (!(event.getLevel() instanceof Level level)) return;
-        if (level.isClientSide()) return;
-
-        WorldPhysicsManager.get(level.dimension())
-                .setBlockValue(event.getPos(), PhysicsType.PRESSURE, 32);
-    }
-
+    /** Tell the physics thread a whole dimension is gone. */
     @SubscribeEvent
     public static void onLevelUnload(LevelEvent.Unload event) {
         if (!(event.getLevel() instanceof Level level)) return;
         if (level.isClientSide()) return;
 
-        WorldPhysicsManager.remove(level.dimension());
+        PhysicsThreadManager.get().onDimensionUnload(level.dimension());
     }
 }

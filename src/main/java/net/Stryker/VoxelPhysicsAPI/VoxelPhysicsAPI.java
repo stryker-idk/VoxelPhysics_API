@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 public class VoxelPhysicsAPI
 {
     public static final String MOD_ID = "voxelphysics_api";
-    private static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LogUtils.getLogger();
 
 
 
