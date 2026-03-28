@@ -3,6 +3,9 @@ package net.Stryker.VoxelPhysicsAPI.debug;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import net.Stryker.VoxelPhysicsAPI.PhysicsEngine;
 import net.Stryker.VoxelPhysicsAPI.PhysicsThread;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType;
@@ -30,116 +33,79 @@ public class PhysicsDebugCommand {
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
 
+        // Build seed node with dynamic branches per type
+        LiteralArgumentBuilder<CommandSourceStack> seedNode = Commands.literal("seed");
+        for (PhysicsType type : PhysicsType.values()) {
+            seedNode.then(buildTypeBranch(type));
+        }
+
         dispatcher.register(
-            Commands.literal("vpdebug")
-                .requires(source -> source.hasPermission(2))
-
-                // /vpdebug seed <type> <value>
-                .then(Commands.literal("seed")
-                    .then(Commands.argument("type", StringArgumentType.word())
-                        .suggests((ctx, builder) -> {
-                            for (PhysicsType t : PhysicsType.values())
-                                builder.suggest(t.name().toLowerCase());
-                            return builder.buildFuture();
-                        })
-                            .then(Commands.argument("values", StringArgumentType.greedyString())
-                                    .executes(ctx -> seed(
-                                            ctx.getSource(),
-                                            StringArgumentType.getString(ctx, "type"),
-                                            StringArgumentType.getString(ctx, "values")
-                                    ))
-                            )
-                    )
-                )
-
-                // /vpdebug toggle
-                .then(Commands.literal("toggle")
-                    .executes(ctx -> toggleVisualizer(ctx.getSource()))
-                )
-
-                // /vpdebug clear
-                .then(Commands.literal("clear")
-                    .executes(ctx -> clearAll(ctx.getSource()))
-                )
-
-                // /vpdebug status
-                .then(Commands.literal("status")
-                    .executes(ctx -> status(ctx.getSource()))
-                )
+                Commands.literal("vpdebug")
+                        .requires(source -> source.hasPermission(2))
+                        .then(seedNode)
+                        .then(Commands.literal("toggle")
+                                .executes(ctx -> toggleVisualizer(ctx.getSource()))
+                        )
+                        .then(Commands.literal("clear")
+                                .executes(ctx -> clearAll(ctx.getSource()))
+                        )
+                        .then(Commands.literal("status")
+                                .executes(ctx -> status(ctx.getSource()))
+                        )
         );
     }
 
-    private static int seed(CommandSourceStack source, String typeName, String valuesStr) {
-        // Get player first (separate try-catch for clarity)
-        ServerPlayer player;
+    /**
+     * Builds the command branch for a specific PhysicsType:
+     * type -> value0 -> value1 -> ... -> executes
+     */
+    private static ArgumentBuilder<CommandSourceStack, ?> buildTypeBranch(PhysicsType type) {
+        // Build chain backwards: start with last value (which has the executor)
+        ArgumentBuilder<CommandSourceStack, ?> chain =
+                Commands.argument("value" + (type.valuesPerCell - 1), IntegerArgumentType.integer(0, 100000))
+                        .executes(ctx -> executeSeed(ctx, type));
+
+        // Chain backwards to first value
+        for (int i = type.valuesPerCell - 2; i >= 0; i--) {
+            final int index = i;
+            chain = Commands.argument("value" + i, IntegerArgumentType.integer(0, 100000))
+                    .then(chain);
+        }
+
+        return Commands.literal(type.name().toLowerCase()).then(chain);
+    }
+
+    private static int executeSeed(CommandContext<CommandSourceStack> ctx, PhysicsType type) {
         try {
-            player = source.getPlayerOrException();
+            ServerPlayer player = ctx.getSource().getPlayerOrException();
+            BlockPos pos = player.blockPosition();
+
+            // Extract values from context
+            int[] values = new int[type.valuesPerCell];
+            for (int i = 0; i < type.valuesPerCell; i++) {
+                values[i] = IntegerArgumentType.getInteger(ctx, "value" + i);
+            }
+
+            PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
+
+            // Build message
+            StringBuilder valueStr = new StringBuilder();
+            for (int i = 0; i < values.length; i++) {
+                valueStr.append(values[i]);
+                if (i < values.length - 1) valueStr.append(" ");
+            }
+
+            ctx.getSource().sendSuccess(
+                    () -> Component.literal("[VoxelPhysics] " + type.name().toLowerCase() +
+                            " " + valueStr + " seeded at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"),
+                    false
+            );
+            return 1;
+
         } catch (Exception e) {
-            source.sendFailure(Component.literal("[VoxelPhysics] Must be a player."));
+            ctx.getSource().sendFailure(Component.literal("[VoxelPhysics] Must be a player."));
             return 0;
         }
-
-        BlockPos pos = player.blockPosition();
-
-        // Find the matching PhysicsType
-        PhysicsType type = null;
-        for (PhysicsType t : PhysicsType.values()) {
-            if (t.name().equalsIgnoreCase(typeName)) {
-                type = t;
-                break;
-            }
-        }
-
-        if (type == null) {
-            StringBuilder names = new StringBuilder();
-            for (PhysicsType t : PhysicsType.values()) {
-                names.append(t.name().toLowerCase()).append(" ");
-            }
-            source.sendFailure(Component.literal(
-                    "[VoxelPhysics] Unknown type '" + typeName + "'. Available: " + names));
-            return 0;
-        }
-
-        // Parse values (comma-separated: "100" or "1000,50")
-        String[] parts = valuesStr.split(",");
-        if (parts.length != type.valuesPerCell) {
-            source.sendFailure(Component.literal(
-                    "[VoxelPhysics] Type '" + typeName + "' requires " + type.valuesPerCell +
-                            " value(s) (e.g., " + (type.valuesPerCell == 1 ? "100" : "1000,50") + ")"));
-            return 0;
-        }
-
-        int[] values = new int[parts.length];
-        try {
-            for (int i = 0; i < parts.length; i++) {
-                values[i] = Integer.parseInt(parts[i].trim());
-                if (values[i] < 0) {
-                    source.sendFailure(Component.literal("[VoxelPhysics] Values must be positive."));
-                    return 0;
-                }
-            }
-        } catch (NumberFormatException e) {
-            source.sendFailure(Component.literal("[VoxelPhysics] Invalid number format."));
-            return 0;
-        }
-
-        // Seed it
-        PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
-
-        // Build success message
-        StringBuilder valueStr = new StringBuilder();
-        for (int i = 0; i < values.length; i++) {
-            valueStr.append(values[i]);
-            if (i < values.length - 1) valueStr.append(", ");
-        }
-
-        final PhysicsType finalType = type;
-        source.sendSuccess(
-                () -> Component.literal("[VoxelPhysics] " + finalType.name().toLowerCase() +
-                        "=" + valueStr + " seeded at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"),
-                false
-        );
-        return 1;
     }
 
     private static int toggleVisualizer(CommandSourceStack source) {
@@ -147,8 +113,8 @@ public class PhysicsDebugCommand {
         PhysicsEngine.snapshotEnabled = PhysicsDebugRenderer.DEBUG_ENABLED;
         String state = PhysicsDebugRenderer.DEBUG_ENABLED ? "ON" : "OFF";
         source.sendSuccess(
-            () -> Component.literal("[VoxelPhysics] Particle visualizer: " + state),
-            false
+                () -> Component.literal("[VoxelPhysics] Particle visualizer: " + state),
+                false
         );
         return 1;
     }
@@ -156,8 +122,8 @@ public class PhysicsDebugCommand {
     private static int clearAll(CommandSourceStack source) {
         PhysicsThread.get().clear();
         source.sendSuccess(
-            () -> Component.literal("[VoxelPhysics] Cleared all physics data."),
-            false
+                () -> Component.literal("[VoxelPhysics] Cleared all physics data."),
+                false
         );
         return 1;
     }
@@ -165,7 +131,6 @@ public class PhysicsDebugCommand {
     private static int status(CommandSourceStack source) {
         StringBuilder sb = new StringBuilder("[VoxelPhysics] Active blocks:\n");
         for (PhysicsType type : PhysicsType.values()) {
-            // For multi-value types, show count for each value index
             for (int v = 0; v < type.valuesPerCell; v++) {
                 int count = PhysicsThread.get().engine.getActiveBlockCount(type, v);
                 String label = type.valuesPerCell == 1 ?
