@@ -88,6 +88,18 @@ public class PhysicsEngine {
         }
     }
 
+    /**
+     * Get the current value at a specific coordinate.
+     * Reads from snapshot (thread-safe, may be up to 1 tick behind).
+     *
+     * @return The value, or 0 if no physics data exists there
+     */
+    public int getValue(int x, int y, int z, PhysicsType type, int valueIndex) {
+        if (valueIndex < 0 || valueIndex >= type.valuesPerCell) return 0;
+        long key = pack(x, y, z);
+        return getSnapshot(type, valueIndex).get(key);
+    }
+
     public void clear() {
         for (int i = 0; i < PhysicsType.COUNT; i++) {
             for (int v = 0; v < current[i].length; v++) {
