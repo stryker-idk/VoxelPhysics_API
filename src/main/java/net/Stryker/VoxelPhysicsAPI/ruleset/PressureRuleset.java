@@ -4,10 +4,6 @@ import net.Stryker.VoxelPhysicsAPI.IRuleset;
 import net.Stryker.VoxelPhysicsAPI.LongIntMap;
 import net.Stryker.VoxelPhysicsAPI.PhysicsEngine;
 
-/**
- * Pressure spreads to 6 neighbors at (value - 1). Source clears.
- * Uses LongIntMap.putMax() — no boxing, no allocation in hot loop.
- */
 public class PressureRuleset implements IRuleset {
 
     public static final PressureRuleset INSTANCE = new PressureRuleset();
@@ -17,8 +13,12 @@ public class PressureRuleset implements IRuleset {
     private static final int[] DZ = { 0,  0,  0,  0,  1, -1 };
 
     @Override
-    public boolean tick(LongIntMap current, LongIntMap next) {
-        current.forEach((key, value) -> {
+    public boolean tick(LongIntMap[] current, LongIntMap[] next) {
+        // Pressure is single-value, so we only use index 0
+        LongIntMap curr = current[0];
+        LongIntMap nxt = next[0];
+
+        curr.forEach((key, value) -> {
             if (value <= 1) return;
 
             int nextValue = value - 1;
@@ -29,9 +29,9 @@ public class PressureRuleset implements IRuleset {
             for (int i = 0; i < 6; i++) {
                 int ny = y + DY[i];
                 if (ny < -64 || ny > 319) continue;
-                next.putMax(PhysicsEngine.pack(x + DX[i], ny, z + DZ[i]), nextValue);
+                nxt.putMax(PhysicsEngine.pack(x + DX[i], ny, z + DZ[i]), nextValue);
             }
         });
-        return !next.isEmpty();
+        return !nxt.isEmpty();
     }
 }
