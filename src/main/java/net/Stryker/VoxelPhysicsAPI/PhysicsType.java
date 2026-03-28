@@ -1,20 +1,42 @@
 package net.Stryker.VoxelPhysicsAPI;
 
+import net.Stryker.VoxelPhysicsAPI.ruleset.PressureRuleset;
+
 /**
- * All simulated physical properties.
- * Each entry gets its own index into the int[] stored per block.
- * To add a new type: just add an enum entry and register a ruleset in RulesetRegistry.
+ * Every simulated physics value is a PhysicsType.
+ *
+ * HOW TO ADD A NEW TYPE:
+ *   1. Add an enum entry here with its config
+ *   2. Create a class implementing IRuleset
+ *   3. That's it — the engine auto-registers everything
+ *
+ * Config per type:
+ *   ruleset       — the IRuleset implementation
+ *   tickInterval  — run every N physics ticks (1 = every tick, 3 = every 3rd tick)
+ *   valuesPerCell — how many ints are stored per block (1 for simple, 2+ for complex types)
+ *
+ * Examples:
+ *   PRESSURE      — 1 value (magnitude), runs every tick
+ *   RADIATION     — 2 values (density, MeV), runs every 3 ticks (slower, cheaper)
+ *   TEMPERATURE   — 1 value, runs every 2 ticks
  */
 public enum PhysicsType {
-    PRESSURE(0);
-    // Future: TEMPERATURE(1), RADIOACTIVITY(2), HUMIDITY(3)
 
-    public final int index;
+    PRESSURE(PressureRuleset.INSTANCE, 1, 1),
+    //NEUTRON_RADIATION(NeutronRadiationRuleset.INSTANCE, 1, 1);
+    // Future examples:
+    // TEMPERATURE(TemperatureRuleset.INSTANCE, 2, 1),
+    // RADIATION(RadiationRuleset.INSTANCE, 3, 2);  // 2 values: density + MeV
 
-    /** Total number of physics types — used to size the int[] per block. */
-    public static final int COUNT = values().length;
+    public final IRuleset ruleset;
+    public final int      tickInterval;  // run every N ticks
+    public final int      valuesPerCell; // how many ints per block
 
-    PhysicsType(int index) {
-        this.index = index;
+    PhysicsType(IRuleset ruleset, int tickInterval, int valuesPerCell) {
+        this.ruleset       = ruleset;
+        this.tickInterval  = tickInterval;
+        this.valuesPerCell = valuesPerCell;
     }
+
+    public static final int COUNT = values().length;
 }

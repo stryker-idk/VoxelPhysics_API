@@ -2,7 +2,9 @@ package net.Stryker.VoxelPhysicsAPI.debug;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import net.Stryker.VoxelPhysicsAPI.PhysicsThreadManager;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.Stryker.VoxelPhysicsAPI.PhysicsEngine;
+import net.Stryker.VoxelPhysicsAPI.PhysicsThread;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -14,12 +16,12 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
- * /vpdebug command — seeds and inspects the physics simulation.
+ * /vpdebug seed <type> <value>  — seed a physics value at your feet
+ * /vpdebug toggle               — toggle particle visualizer
+ * /vpdebug clear                — wipe all active physics data
+ * /vpdebug status               — print active block counts per type
  *
- * Usage:
- *   /vpdebug pressure <0-255>   — seed pressure at your feet
- *   /vpdebug toggle             — toggle particle visualizer
- *   /vpdebug clear              — wipe all physics data in loaded chunks
+ * <type> is the PhysicsType name, lowercase: pressure, temperature, radiation, etc.
  */
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PhysicsDebugCommand {
@@ -32,54 +34,82 @@ public class PhysicsDebugCommand {
             Commands.literal("vpdebug")
                 .requires(source -> source.hasPermission(2))
 
-                .then(Commands.literal("pressure")
-                    .then(Commands.argument("value", IntegerArgumentType.integer(0, 255))
-                        .executes(ctx -> setPressure(
-                            ctx.getSource(),
-                            IntegerArgumentType.getInteger(ctx, "value")
-                        ))
+                // /vpdebug seed <type> <value>
+                .then(Commands.literal("seed")
+                    .then(Commands.argument("type", StringArgumentType.word())
+                        .suggests((ctx, builder) -> {
+                            for (PhysicsType t : PhysicsType.values())
+                                builder.suggest(t.name().toLowerCase());
+                            return builder.buildFuture();
+                        })
+                        .then(Commands.argument("value", IntegerArgumentType.integer(0, 100000))
+                            .executes(ctx -> seed(
+                                ctx.getSource(),
+                                StringArgumentType.getString(ctx, "type"),
+                                IntegerArgumentType.getInteger(ctx, "value")
+                            ))
+                        )
                     )
                 )
 
+                // /vpdebug toggle
                 .then(Commands.literal("toggle")
                     .executes(ctx -> toggleVisualizer(ctx.getSource()))
                 )
 
+                // /vpdebug clear
                 .then(Commands.literal("clear")
                     .executes(ctx -> clearAll(ctx.getSource()))
+                )
+
+                // /vpdebug status
+                .then(Commands.literal("status")
+                    .executes(ctx -> status(ctx.getSource()))
                 )
         );
     }
 
-    // -------------------------------------------------------------------------
-
-    private static int setPressure(CommandSourceStack source, int value) {
+    private static int seed(CommandSourceStack source, String typeName, int value) {
         try {
             ServerPlayer player = source.getPlayerOrException();
             BlockPos pos = player.blockPosition();
 
-            // Feed into the queue — physics thread picks it up next tick
-            PhysicsThreadManager.get().seed(
-                player.serverLevel().dimension(),
-                pos,
-                PhysicsType.PRESSURE,
-                value
-            );
+            // Find the matching PhysicsType by name (case-insensitive)
+            PhysicsType type = null;
+            for (PhysicsType t : PhysicsType.values()) {
+                if (t.name().equalsIgnoreCase(typeName)) {
+                    type = t;
+                    break;
+                }
+            }
 
+            if (type == null) {
+                StringBuilder names = new StringBuilder();
+                for (PhysicsType t : PhysicsType.values()) names.append(t.name().toLowerCase()).append(" ");
+                source.sendFailure(Component.literal(
+                    "[VoxelPhysics] Unknown type '" + typeName + "'. Available: " + names));
+                return 0;
+            }
+
+            PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, value);
+
+            final PhysicsType finalType = type;
             source.sendSuccess(
-                () -> Component.literal("[VoxelPhysics] pressure=" + value + " queued at " + formatPos(pos)),
+                () -> Component.literal("[VoxelPhysics] " + finalType.name().toLowerCase() +
+                    "=" + value + " seeded at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"),
                 false
             );
             return 1;
 
         } catch (Exception e) {
-            source.sendFailure(Component.literal("[VoxelPhysics] Must be a player to use this command."));
+            source.sendFailure(Component.literal("[VoxelPhysics] Must be a player."));
             return 0;
         }
     }
 
     private static int toggleVisualizer(CommandSourceStack source) {
         PhysicsDebugRenderer.DEBUG_ENABLED = !PhysicsDebugRenderer.DEBUG_ENABLED;
+        PhysicsEngine.snapshotEnabled = PhysicsDebugRenderer.DEBUG_ENABLED;
         String state = PhysicsDebugRenderer.DEBUG_ENABLED ? "ON" : "OFF";
         source.sendSuccess(
             () -> Component.literal("[VoxelPhysics] Particle visualizer: " + state),
@@ -89,26 +119,23 @@ public class PhysicsDebugCommand {
     }
 
     private static int clearAll(CommandSourceStack source) {
-        try {
-            ServerPlayer player = source.getPlayerOrException();
-
-            // Feeds the clearQueue — physics thread zeroes all hashmaps next tick.
-            // Chunk registrations stay intact, so simulation resumes immediately.
-            PhysicsThreadManager.get().clearDimension(player.serverLevel().dimension());
-
-            source.sendSuccess(
-                () -> Component.literal("[VoxelPhysics] Cleared all physics data."),
-                false
-            );
-            return 1;
-
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("[VoxelPhysics] Must be a player to use this command."));
-            return 0;
-        }
+        PhysicsThread.get().clear();
+        source.sendSuccess(
+            () -> Component.literal("[VoxelPhysics] Cleared all physics data."),
+            false
+        );
+        return 1;
     }
 
-    private static String formatPos(BlockPos pos) {
-        return "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+    private static int status(CommandSourceStack source) {
+        StringBuilder sb = new StringBuilder("[VoxelPhysics] Active blocks:\n");
+        for (PhysicsType type : PhysicsType.values()) {
+            int count = PhysicsThread.get().engine.getActiveBlockCount(type);
+            sb.append("  ").append(type.name().toLowerCase())
+              .append(": ").append(count).append("\n");
+        }
+        String msg = sb.toString();
+        source.sendSuccess(() -> Component.literal(msg), false);
+        return 1;
     }
 }
