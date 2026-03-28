@@ -70,14 +70,14 @@ public class PhysicsThread {
     // -------------------------------------------------------------------------
 
     /** Seed a single-value type (e.g. PRESSURE). */
-    public void seed(BlockPos pos, PhysicsType type, int value) {
-        engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, value);
+    public void seed(BlockPos pos, PhysicsType type, int... values) {
+        engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
     }
 
-    /** Seed a multi-value type (e.g. RADIATION with density + MeV). */
-    //public void seedMulti(BlockPos pos, PhysicsType type, int value1, int value2) {
-    //    engine.seedMulti(pos.getX(), pos.getY(), pos.getZ(), type, value1, value2);
-    //}
+    /** Convenience for raw coordinates. */
+    public void seed(int x, int y, int z, PhysicsType type, int... values) {
+        engine.seed(x, y, z, type, values);
+    }
 
     public void clear() { engine.clear(); }
 }

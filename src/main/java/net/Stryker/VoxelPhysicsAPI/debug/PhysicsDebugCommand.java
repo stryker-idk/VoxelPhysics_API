@@ -42,13 +42,13 @@ public class PhysicsDebugCommand {
                                 builder.suggest(t.name().toLowerCase());
                             return builder.buildFuture();
                         })
-                        .then(Commands.argument("value", IntegerArgumentType.integer(0, 100000))
-                            .executes(ctx -> seed(
-                                ctx.getSource(),
-                                StringArgumentType.getString(ctx, "type"),
-                                IntegerArgumentType.getInteger(ctx, "value")
-                            ))
-                        )
+                            .then(Commands.argument("values", StringArgumentType.greedyString())
+                                    .executes(ctx -> seed(
+                                            ctx.getSource(),
+                                            StringArgumentType.getString(ctx, "type"),
+                                            StringArgumentType.getString(ctx, "values")
+                                    ))
+                            )
                     )
                 )
 
@@ -69,42 +69,77 @@ public class PhysicsDebugCommand {
         );
     }
 
-    private static int seed(CommandSourceStack source, String typeName, int value) {
+    private static int seed(CommandSourceStack source, String typeName, String valuesStr) {
+        // Get player first (separate try-catch for clarity)
+        ServerPlayer player;
         try {
-            ServerPlayer player = source.getPlayerOrException();
-            BlockPos pos = player.blockPosition();
-
-            // Find the matching PhysicsType by name (case-insensitive)
-            PhysicsType type = null;
-            for (PhysicsType t : PhysicsType.values()) {
-                if (t.name().equalsIgnoreCase(typeName)) {
-                    type = t;
-                    break;
-                }
-            }
-
-            if (type == null) {
-                StringBuilder names = new StringBuilder();
-                for (PhysicsType t : PhysicsType.values()) names.append(t.name().toLowerCase()).append(" ");
-                source.sendFailure(Component.literal(
-                    "[VoxelPhysics] Unknown type '" + typeName + "'. Available: " + names));
-                return 0;
-            }
-
-            PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, value);
-
-            final PhysicsType finalType = type;
-            source.sendSuccess(
-                () -> Component.literal("[VoxelPhysics] " + finalType.name().toLowerCase() +
-                    "=" + value + " seeded at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"),
-                false
-            );
-            return 1;
-
+            player = source.getPlayerOrException();
         } catch (Exception e) {
             source.sendFailure(Component.literal("[VoxelPhysics] Must be a player."));
             return 0;
         }
+
+        BlockPos pos = player.blockPosition();
+
+        // Find the matching PhysicsType
+        PhysicsType type = null;
+        for (PhysicsType t : PhysicsType.values()) {
+            if (t.name().equalsIgnoreCase(typeName)) {
+                type = t;
+                break;
+            }
+        }
+
+        if (type == null) {
+            StringBuilder names = new StringBuilder();
+            for (PhysicsType t : PhysicsType.values()) {
+                names.append(t.name().toLowerCase()).append(" ");
+            }
+            source.sendFailure(Component.literal(
+                    "[VoxelPhysics] Unknown type '" + typeName + "'. Available: " + names));
+            return 0;
+        }
+
+        // Parse values (comma-separated: "100" or "1000,50")
+        String[] parts = valuesStr.split(",");
+        if (parts.length != type.valuesPerCell) {
+            source.sendFailure(Component.literal(
+                    "[VoxelPhysics] Type '" + typeName + "' requires " + type.valuesPerCell +
+                            " value(s) (e.g., " + (type.valuesPerCell == 1 ? "100" : "1000,50") + ")"));
+            return 0;
+        }
+
+        int[] values = new int[parts.length];
+        try {
+            for (int i = 0; i < parts.length; i++) {
+                values[i] = Integer.parseInt(parts[i].trim());
+                if (values[i] < 0) {
+                    source.sendFailure(Component.literal("[VoxelPhysics] Values must be positive."));
+                    return 0;
+                }
+            }
+        } catch (NumberFormatException e) {
+            source.sendFailure(Component.literal("[VoxelPhysics] Invalid number format."));
+            return 0;
+        }
+
+        // Seed it
+        PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
+
+        // Build success message
+        StringBuilder valueStr = new StringBuilder();
+        for (int i = 0; i < values.length; i++) {
+            valueStr.append(values[i]);
+            if (i < values.length - 1) valueStr.append(", ");
+        }
+
+        final PhysicsType finalType = type;
+        source.sendSuccess(
+                () -> Component.literal("[VoxelPhysics] " + finalType.name().toLowerCase() +
+                        "=" + valueStr + " seeded at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"),
+                false
+        );
+        return 1;
     }
 
     private static int toggleVisualizer(CommandSourceStack source) {
@@ -130,12 +165,16 @@ public class PhysicsDebugCommand {
     private static int status(CommandSourceStack source) {
         StringBuilder sb = new StringBuilder("[VoxelPhysics] Active blocks:\n");
         for (PhysicsType type : PhysicsType.values()) {
-            int count = PhysicsThread.get().engine.getActiveBlockCount(type);
-            sb.append("  ").append(type.name().toLowerCase())
-              .append(": ").append(count).append("\n");
+            // For multi-value types, show count for each value index
+            for (int v = 0; v < type.valuesPerCell; v++) {
+                int count = PhysicsThread.get().engine.getActiveBlockCount(type, v);
+                String label = type.valuesPerCell == 1 ?
+                        type.name().toLowerCase() :
+                        type.name().toLowerCase() + "[" + v + "]";
+                sb.append(" ").append(label).append(": ").append(count).append("\n");
+            }
         }
-        String msg = sb.toString();
-        source.sendSuccess(() -> Component.literal(msg), false);
+        source.sendSuccess(() -> Component.literal(sb.toString()), false);
         return 1;
     }
 }

@@ -1,5 +1,6 @@
 package net.Stryker.VoxelPhysicsAPI;
 
+import net.Stryker.VoxelPhysicsAPI.ruleset.NeutronRadiationRuleset;
 import net.Stryker.VoxelPhysicsAPI.ruleset.PressureRuleset;
 
 /**
@@ -23,19 +24,16 @@ import net.Stryker.VoxelPhysicsAPI.ruleset.PressureRuleset;
 public enum PhysicsType {
 
     PRESSURE(PressureRuleset.INSTANCE, 1, 1),
-    //NEUTRON_RADIATION(NeutronRadiationRuleset.INSTANCE, 1, 1);
-    // Future examples:
-    // TEMPERATURE(TemperatureRuleset.INSTANCE, 2, 1),
-    // RADIATION(RadiationRuleset.INSTANCE, 3, 2);  // 2 values: density + MeV
+    NEUTRON_RADIATION(NeutronRadiationRuleset.INSTANCE, 1, 2), // 2 values: flux + energy
     ;
 
     public final IRuleset ruleset;
-    public final int      tickInterval;  // run every N ticks
-    public final int      valuesPerCell; // how many ints per block
+    public final int tickInterval;
+    public final int valuesPerCell; // Now actually used for array sizing!
 
     PhysicsType(IRuleset ruleset, int tickInterval, int valuesPerCell) {
-        this.ruleset       = ruleset;
-        this.tickInterval  = tickInterval;
+        this.ruleset = ruleset;
+        this.tickInterval = tickInterval;
         this.valuesPerCell = valuesPerCell;
     }
 

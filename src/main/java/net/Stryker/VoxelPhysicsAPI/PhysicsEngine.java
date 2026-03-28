@@ -64,17 +64,28 @@ public class PhysicsEngine {
         snapshot = new AtomicReference<>(snapshotMaps);
     }
 
-    // Single-value seed (convenience method for PRESSURE, etc.)
-    public void seed(int x, int y, int z, PhysicsType type, int value) {
-        seed(x, y, z, type, 0, value);
-    }
 
-    // Multi-value seed (specify which value index: 0=flux, 1=energy, etc.)
-    public void seed(int x, int y, int z, PhysicsType type, int valueIndex, int value) {
-        if (value <= 0 || valueIndex < 0 || valueIndex >= type.valuesPerCell) return;
-        seedQueue.add(new long[]{ pack(x, y, z), type.ordinal(), valueIndex, value });
-        active = true;
-        quietTicks = 0;
+    public void seed(int x, int y, int z, PhysicsType type, int... values) {
+        if (values.length != type.valuesPerCell) {
+            throw new IllegalArgumentException(
+                    type.name() + " requires exactly " + type.valuesPerCell +
+                            " value(s), but got " + values.length
+            );
+        }
+
+        // Only mark active if at least one value is non-zero
+        boolean hasValue = false;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] > 0) {
+                seedQueue.add(new long[]{ pack(x, y, z), type.ordinal(), i, values[i] });
+                hasValue = true;
+            }
+        }
+
+        if (hasValue) {
+            active = true;
+            quietTicks = 0;
+        }
     }
 
     public void clear() {
