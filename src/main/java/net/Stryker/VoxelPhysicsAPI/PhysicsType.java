@@ -27,6 +27,7 @@ public enum PhysicsType {
     // Future examples:
     // TEMPERATURE(TemperatureRuleset.INSTANCE, 2, 1),
     // RADIATION(RadiationRuleset.INSTANCE, 3, 2);  // 2 values: density + MeV
+    ;
 
     public final IRuleset ruleset;
     public final int      tickInterval;  // run every N ticks
