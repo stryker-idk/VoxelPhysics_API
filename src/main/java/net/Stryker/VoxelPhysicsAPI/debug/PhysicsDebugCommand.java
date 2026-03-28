@@ -61,14 +61,15 @@ public class PhysicsDebugCommand {
      */
     private static ArgumentBuilder<CommandSourceStack, ?> buildTypeBranch(PhysicsType type) {
         // Build chain backwards: start with last value (which has the executor)
+        String lastName = type.valueNames[type.valuesPerCell - 1];
         ArgumentBuilder<CommandSourceStack, ?> chain =
-                Commands.argument("value" + (type.valuesPerCell - 1), IntegerArgumentType.integer(0, 100000))
+                Commands.argument(lastName, IntegerArgumentType.integer(0, 100000))
                         .executes(ctx -> executeSeed(ctx, type));
 
         // Chain backwards to first value
         for (int i = type.valuesPerCell - 2; i >= 0; i--) {
             final int index = i;
-            chain = Commands.argument("value" + i, IntegerArgumentType.integer(0, 100000))
+            chain = Commands.argument(type.valueNames[index], IntegerArgumentType.integer(0, 100000))
                     .then(chain);
         }
 
@@ -80,26 +81,25 @@ public class PhysicsDebugCommand {
             ServerPlayer player = ctx.getSource().getPlayerOrException();
             BlockPos pos = player.blockPosition();
 
-            // Extract values from context
+            // Extract values using the actual names
             int[] values = new int[type.valuesPerCell];
             for (int i = 0; i < type.valuesPerCell; i++) {
-                values[i] = IntegerArgumentType.getInteger(ctx, "value" + i);
+                values[i] = IntegerArgumentType.getInteger(ctx, type.valueNames[i]);
             }
 
             PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
 
-            // Build message
+            // Build message showing names
             StringBuilder valueStr = new StringBuilder();
             for (int i = 0; i < values.length; i++) {
-                valueStr.append(values[i]);
-                if (i < values.length - 1) valueStr.append(" ");
+                valueStr.append(type.valueNames[i]).append("=").append(values[i]);
+                if (i < values.length - 1) valueStr.append(", ");
             }
 
-            ctx.getSource().sendSuccess(
-                    () -> Component.literal("[VoxelPhysics] " + type.name().toLowerCase() +
-                            " " + valueStr + " seeded at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")"),
-                    false
-            );
+            final String msg = "[VoxelPhysics] " + type.name().toLowerCase() + " (" + valueStr +
+                    ") seeded at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
+
+            ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
             return 1;
 
         } catch (Exception e) {

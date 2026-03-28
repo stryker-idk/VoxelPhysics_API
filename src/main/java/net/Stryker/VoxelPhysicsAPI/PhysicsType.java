@@ -23,18 +23,32 @@ import net.Stryker.VoxelPhysicsAPI.ruleset.PressureRuleset;
  */
 public enum PhysicsType {
 
-    PRESSURE(PressureRuleset.INSTANCE, 1, 1),
-    NEUTRON_RADIATION(NeutronRadiationRuleset.INSTANCE, 1, 2), // 2 values: flux + energy
+    PRESSURE(PressureRuleset.INSTANCE, 1, 1, "pressure"),
+    NEUTRON_RADIATION(NeutronRadiationRuleset.INSTANCE, 1, 2, "flux", "energy"),
+    // Future: TEMPERATURE(TemperatureRuleset.INSTANCE, 2, 1, "temperature"),
+    // Future: RADIATION(RadiationRuleset.INSTANCE, 3, 2, "density", "mev")
     ;
 
     public final IRuleset ruleset;
     public final int tickInterval;
-    public final int valuesPerCell; // Now actually used for array sizing!
+    public final int valuesPerCell;
+    public final String[] valueNames; // NEW: names for each value index
 
-    PhysicsType(IRuleset ruleset, int tickInterval, int valuesPerCell) {
+    // Constructor for single value (backward compatible)
+    PhysicsType(IRuleset ruleset, int tickInterval, int valuesPerCell, String valueName) {
+        this(ruleset, tickInterval, valuesPerCell, new String[]{valueName});
+    }
+
+    // Constructor for multiple values
+    PhysicsType(IRuleset ruleset, int tickInterval, int valuesPerCell, String... valueNames) {
+        if (valueNames.length != valuesPerCell) {
+            throw new IllegalArgumentException(name() + ": valueNames count (" + valueNames.length +
+                    ") doesn't match valuesPerCell (" + valuesPerCell + ")");
+        }
         this.ruleset = ruleset;
         this.tickInterval = tickInterval;
         this.valuesPerCell = valuesPerCell;
+        this.valueNames = valueNames;
     }
 
     public static final int COUNT = values().length;
