@@ -1,88 +1,40 @@
 package net.Stryker.VoxelPhysicsAPI;
 
-import com.mojang.logging.LogUtils;
-import net.Stryker.VoxelPhysicsAPI.block.ModBlocks;
-import net.Stryker.VoxelPhysicsAPI.item.ModItems;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-
-
-// The value here should match an entry in the META-INF/mods.toml file
 @Mod(VoxelPhysicsAPI.MOD_ID)
-public class VoxelPhysicsAPI
-{
+public class VoxelPhysicsAPI {
     public static final String MOD_ID = "voxelphysics_api";
-    public static final Logger LOGGER = LogUtils.getLogger();
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
+    public VoxelPhysicsAPI(FMLJavaModLoadingContext context) {
+        LOGGER.info("VoxelPhysics API initializing...");
 
+        IEventBus modBus = context.getModEventBus();
 
+        // Register the physics type registry (empty by default)
+        PhysicsTypeRegistry.register(modBus);
 
-
-    public VoxelPhysicsAPI(FMLJavaModLoadingContext context)
-    {
-        LOGGER.info("VoxelPhysics initializing...");
-
-        IEventBus modEventBus = context.getModEventBus();
-
-        //ModCreativeModTabs.register(modEventBus);
-
-        ModItems.register(modEventBus);
-        ModBlocks.register(modEventBus);
-
-        modEventBus.addListener(this::commonSetup);
-
-        MinecraftForge.EVENT_BUS.register(this);
-
-        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
-
-
-
-        //modEventBus.addListener(this::addCreative);
-
+        modBus.addListener(this::commonSetup);
     }
 
-    @SubscribeEvent
-    public void onServerTick(TickEvent.LevelTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        if (event.side != LogicalSide.SERVER) return;
+    private void commonSetup(FMLCommonSetupEvent event) {
+        PhysicsTypeRegistry.freeze();
+        LOGGER.info("VoxelPhysics API loaded. Registered types: " + PhysicsTypeRegistry.count());
 
-    }
+        PhysicsTypeRegistry.freeze();
+        VoxelPhysicsAPI.LOGGER.info("Registry frozen. Count: " + PhysicsTypeRegistry.count());
 
-    private void commonSetup(final FMLCommonSetupEvent event)
-    {
-
-    }
-
-
-
-    //private void addCreative(BuildCreativeModeTabContentsEvent event)
-    //{
-    //    if(event.getTabKey() == CreativeModeTabs.INGREDIENTS)
-    //    {
-    //       //creative tab shenanigans
-    //    }
-    //}
-
-
-
-    // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
-    @Mod.EventBusSubscriber(modid = MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-    public static class ClientModEvents
-    {
-        @SubscribeEvent
-        public static void onClientSetup(FMLClientSetupEvent event)
-        {
-
-        }
+        // Don't start thread here - let it start naturally on server start
+        // But we can verify the engine would work:
+        PhysicsEngine testEngine = new PhysicsEngine();
+        VoxelPhysicsAPI.LOGGER.info("Engine created with " + testEngine.getTypeCount() + " type slots");
+        // Start physics thread (even if empty, addons will populate it)
+        PhysicsThread.get().start();
     }
 }

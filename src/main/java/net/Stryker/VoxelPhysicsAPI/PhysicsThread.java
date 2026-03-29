@@ -8,13 +8,13 @@ import net.minecraftforge.fml.common.Mod;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@Mod.EventBusSubscriber(modid = VoxelPhysicsAPI.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PhysicsThread {
 
     private static final PhysicsThread INSTANCE = new PhysicsThread();
     public static PhysicsThread get() { return INSTANCE; }
 
-    public final PhysicsEngine engine = new PhysicsEngine();
+    public PhysicsEngine engine;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private Thread thread;
@@ -33,10 +33,15 @@ public class PhysicsThread {
 
     public void start() {
         if (running.getAndSet(true)) return;
+
+        // Create engine HERE after registry is frozen
+        if (PhysicsTypeRegistry.count() == 0) {
+            VoxelPhysicsAPI.LOGGER.warn("No physics types registered! Engine will be idle.");
+        }
+        engine = new PhysicsEngine();
+
         thread = new Thread(this::loop, "VoxelPhysics-Thread");
-        thread.setDaemon(true);
-        thread.start();
-        VoxelPhysicsAPI.LOGGER.info("[VoxelPhysics] Physics thread started at 100 TPS.");
+        // ... rest
     }
 
     public void stop() {

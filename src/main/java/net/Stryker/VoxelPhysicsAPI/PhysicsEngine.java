@@ -19,17 +19,13 @@ public class PhysicsEngine {
 
     private static final int INITIAL_CAPACITY = 1 << 19;
 
-    // Now 2D arrays: [typeIndex][valueIndex]
+    // Initialized in constructor after registry is frozen
     private final LongIntMap[][] current;
     private final LongIntMap[][] next;
     private final LongIntMap[][] snapshotMaps;
+    private final int[] tickCounters;
 
-    private final int[] tickCounters = new int[PhysicsType.COUNT];
-
-    // Snapshot now holds 2D array
     private final AtomicReference<LongIntMap[][]> snapshot;
-
-    // Seed queue now includes valueIndex: [packedKey, typeOrdinal, valueIndex, value]
     private final ConcurrentLinkedQueue<long[]> seedQueue = new ConcurrentLinkedQueue<>();
 
     private boolean active = false;
@@ -41,14 +37,16 @@ public class PhysicsEngine {
     private static final int SNAPSHOT_INTERVAL = 20;
 
     public PhysicsEngine() {
-        // Allocate 2D arrays based on valuesPerCell for each type
-        current = new LongIntMap[PhysicsType.COUNT][];
-        next = new LongIntMap[PhysicsType.COUNT][];
-        snapshotMaps = new LongIntMap[PhysicsType.COUNT][];
+        int typeCount = PhysicsTypeRegistry.count();
 
-        for (int i = 0; i < PhysicsType.COUNT; i++) {
-            PhysicsType type = PhysicsType.values()[i];
-            int values = type.valuesPerCell;
+        current = new LongIntMap[typeCount][];
+        next = new LongIntMap[typeCount][];
+        snapshotMaps = new LongIntMap[typeCount][];
+        tickCounters = new int[typeCount];
+
+        for (int i = 0; i < typeCount; i++) {
+            PhysicsType type = PhysicsTypeRegistry.values().get(i);
+            int values = type.getValuesPerCell();
 
             current[i] = new LongIntMap[values];
             next[i] = new LongIntMap[values];
@@ -64,16 +62,14 @@ public class PhysicsEngine {
         snapshot = new AtomicReference<>(snapshotMaps);
     }
 
-
     public void seed(int x, int y, int z, PhysicsType type, int... values) {
-        if (values.length != type.valuesPerCell) {
+        if (values.length != type.getValuesPerCell()) {
             throw new IllegalArgumentException(
-                    type.name() + " requires exactly " + type.valuesPerCell +
+                    type.getId() + " requires exactly " + type.getValuesPerCell() +
                             " value(s), but got " + values.length
             );
         }
 
-        // Only mark active if at least one value is non-zero
         boolean hasValue = false;
         for (int i = 0; i < values.length; i++) {
             if (values[i] > 0) {
@@ -88,20 +84,8 @@ public class PhysicsEngine {
         }
     }
 
-    /**
-     * Get the current value at a specific coordinate.
-     * Reads from snapshot (thread-safe, may be up to 1 tick behind).
-     *
-     * @return The value, or 0 if no physics data exists there
-     */
-    public int getValue(int x, int y, int z, PhysicsType type, int valueIndex) {
-        if (valueIndex < 0 || valueIndex >= type.valuesPerCell) return 0;
-        long key = pack(x, y, z);
-        return getSnapshot(type, valueIndex).get(key);
-    }
-
     public void clear() {
-        for (int i = 0; i < PhysicsType.COUNT; i++) {
+        for (int i = 0; i < current.length; i++) {
             for (int v = 0; v < current[i].length; v++) {
                 current[i][v].clear();
                 next[i][v].clear();
@@ -113,12 +97,10 @@ public class PhysicsEngine {
         quietTicks = 0;
     }
 
-    // Get specific value map from snapshot
     public LongIntMap getSnapshot(PhysicsType type, int valueIndex) {
         return snapshot.get()[type.ordinal()][valueIndex];
     }
 
-    // Convenience: get first value (for single-value types)
     public LongIntMap getSnapshot(PhysicsType type) {
         return getSnapshot(type, 0);
     }
@@ -135,8 +117,17 @@ public class PhysicsEngine {
         return total;
     }
 
+    public int getValue(int x, int y, int z, PhysicsType type, int valueIndex) {
+        if (valueIndex < 0 || valueIndex >= type.getValuesPerCell()) return 0;
+        long key = pack(x, y, z);
+        return getSnapshot(type, valueIndex).get(key);
+    }
+
+    public int getValue(int x, int y, int z, PhysicsType type) {
+        return getValue(x, y, z, type, 0);
+    }
+
     public void tick() {
-        // Drain seeds
         long[] seed;
         while ((seed = seedQueue.poll()) != null) {
             int typeIdx = (int) seed[1];
@@ -151,10 +142,9 @@ public class PhysicsEngine {
         globalTick++;
         boolean anyActive = false;
 
-        for (PhysicsType type : PhysicsType.values()) {
+        for (PhysicsType type : PhysicsTypeRegistry.values()) {
             int i = type.ordinal();
 
-            // Skip if all value maps are empty
             boolean allEmpty = true;
             for (LongIntMap map : current[i]) {
                 if (!map.isEmpty()) {
@@ -165,20 +155,18 @@ public class PhysicsEngine {
             if (allEmpty) continue;
 
             tickCounters[i]++;
-            if (tickCounters[i] < type.tickInterval) {
+            if (tickCounters[i] < type.getTickInterval()) {
                 anyActive = true;
                 continue;
             }
             tickCounters[i] = 0;
 
-            // Clear all next maps for this type
             for (LongIntMap map : next[i]) {
                 map.clear();
             }
 
-            boolean stillActive = type.ruleset.tick(current[i], next[i]);
+            boolean stillActive = type.getRuleset().tick(current[i], next[i]);
 
-            // Swap all maps for this type
             for (int v = 0; v < current[i].length; v++) {
                 LongIntMap tmp = current[i][v];
                 current[i][v] = next[i][v];
@@ -198,9 +186,8 @@ public class PhysicsEngine {
             quietTicks = 0;
         }
 
-        // Snapshot update
         if (snapshotEnabled && globalTick % SNAPSHOT_INTERVAL == 0) {
-            for (int i = 0; i < PhysicsType.COUNT; i++) {
+            for (int i = 0; i < current.length; i++) {
                 for (int v = 0; v < current[i].length; v++) {
                     snapshotMaps[i][v].clear();
                     final LongIntMap snap = snapshotMaps[i][v];
@@ -209,5 +196,9 @@ public class PhysicsEngine {
                 }
             }
         }
+    }
+
+    public int getTypeCount() {
+        return current != null ? current.length : 0;
     }
 }
