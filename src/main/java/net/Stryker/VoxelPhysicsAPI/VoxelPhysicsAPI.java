@@ -1,5 +1,6 @@
 package net.Stryker.VoxelPhysicsAPI;
 
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -25,16 +26,45 @@ public class VoxelPhysicsAPI {
 
     private void commonSetup(FMLCommonSetupEvent event) {
         PhysicsTypeRegistry.freeze();
+
+        // DEBUG: Register a test type directly if registry is empty
+        if (PhysicsTypeRegistry.count() == 0) {
+            LOGGER.warn("No physics types registered! Adding debug value type.");
+
+            PhysicsType debugValue = new PhysicsType(
+                    ResourceLocation.fromNamespaceAndPath(MOD_ID, "debug_value"),
+                    new IRuleset() {
+                        @Override
+                        public boolean tick(LongIntMap[] current, LongIntMap[] next) {
+                            // Simple pressure diffusion - spreads and decays
+                            current[0].forEach((key, value) -> {
+                                if (value <= 1) return; // Die if too low
+
+                                int nextValue = value - 1;
+                                int x = PhysicsEngine.unpackX(key);
+                                int y = PhysicsEngine.unpackY(key);
+                                int z = PhysicsEngine.unpackZ(key);
+
+                                // Spread to 6 neighbors
+                                next[0].putMax(PhysicsEngine.pack(x+1, y, z), nextValue);
+                                next[0].putMax(PhysicsEngine.pack(x-1, y, z), nextValue);
+                                next[0].putMax(PhysicsEngine.pack(x, y+1, z), nextValue);
+                                next[0].putMax(PhysicsEngine.pack(x, y-1, z), nextValue);
+                                next[0].putMax(PhysicsEngine.pack(x, y, z+1), nextValue);
+                                next[0].putMax(PhysicsEngine.pack(x, y, z-1), nextValue);
+                            });
+                            return !next[0].isEmpty(); // Return true if we have active blocks
+                        }
+                    },
+                    1, 1, "value"
+            );
+
+            PhysicsTypeRegistry.addDebugType(debugValue);
+        }
+
         LOGGER.info("VoxelPhysics API loaded. Registered types: " + PhysicsTypeRegistry.count());
 
-        PhysicsTypeRegistry.freeze();
-        VoxelPhysicsAPI.LOGGER.info("Registry frozen. Count: " + PhysicsTypeRegistry.count());
-
-        // Don't start thread here - let it start naturally on server start
-        // But we can verify the engine would work:
-        PhysicsEngine testEngine = new PhysicsEngine();
-        VoxelPhysicsAPI.LOGGER.info("Engine created with " + testEngine.getTypeCount() + " type slots");
-        // Start physics thread (even if empty, addons will populate it)
+        // Create engine AFTER we have types
         PhysicsThread.get().start();
     }
 }

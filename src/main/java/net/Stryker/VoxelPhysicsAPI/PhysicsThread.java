@@ -8,6 +8,8 @@ import net.minecraftforge.fml.common.Mod;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static net.Stryker.VoxelPhysicsAPI.VoxelPhysicsAPI.LOGGER;
+
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PhysicsThread {
 
@@ -32,32 +34,49 @@ public class PhysicsThread {
     }
 
     public void start() {
-        if (running.getAndSet(true)) return;
-
-        // Create engine HERE after registry is frozen
-        if (PhysicsTypeRegistry.count() == 0) {
-            VoxelPhysicsAPI.LOGGER.warn("No physics types registered! Engine will be idle.");
+        if (running.getAndSet(true)) {
+            LOGGER.info("[VoxelPhysics] Physics thread already running.");
+            return;
         }
-        engine = new PhysicsEngine();
+
+        System.out.println("[PHYSICS DEBUG] Creating PhysicsEngine...");
+        if (engine == null) {
+            engine = new PhysicsEngine();
+            System.out.println("[PHYSICS DEBUG] Engine created with " + engine.getTypeCount() + " types");
+        }
 
         thread = new Thread(this::loop, "VoxelPhysics-Thread");
-        // ... rest
+        thread.setDaemon(true);
+        thread.start();
+        LOGGER.info("[VoxelPhysics] Physics thread started at 100 TPS.");
     }
 
     public void stop() {
         running.set(false);
         if (thread != null) { thread.interrupt(); thread = null; }
-        VoxelPhysicsAPI.LOGGER.info("[VoxelPhysics] Physics thread stopped.");
+        LOGGER.info("[VoxelPhysics] Physics thread stopped.");
     }
 
     private void loop() {
+
+        //DEBUG
+        //System.out.println("[PHYSICS DEBUG] Thread loop starting!");
+
         while (running.get()) {
             long start = System.nanoTime();
+
+
             try {
+                //DEBUG
+                //System.out.println("[PHYSICS DEBUG] About to call engine.tick()");
                 engine.tick();
+                //DEBUG
+                //System.out.println("[PHYSICS DEBUG] engine.tick() completed");
             } catch (Exception e) {
-                VoxelPhysicsAPI.LOGGER.error("[VoxelPhysics] Tick error: ", e);
+                LOGGER.error("[VoxelPhysics] Tick error: ", e);
+                e.printStackTrace(); // Print to console too
             }
+
             long sleep = NANOS_PER_TICK - (System.nanoTime() - start);
             if (sleep > 0) {
                 try {
@@ -68,6 +87,8 @@ public class PhysicsThread {
                 }
             }
         }
+
+        System.out.println("[PHYSICS DEBUG] Thread loop ending!");
     }
 
     // -------------------------------------------------------------------------

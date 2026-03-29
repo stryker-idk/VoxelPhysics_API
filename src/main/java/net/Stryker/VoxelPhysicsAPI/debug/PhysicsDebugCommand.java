@@ -64,19 +64,30 @@ public class PhysicsDebugCommand {
     }
 
     private static int executeSeed(CommandContext<CommandSourceStack> ctx, PhysicsType type) {
+        System.out.println("[PHYSICS DEBUG] executeSeed called for " + type.getId());
+
         try {
             ServerPlayer player = ctx.getSource().getPlayerOrException();
             BlockPos pos = player.blockPosition();
 
-            // Extract values using the actual names
+            System.out.println("[PHYSICS DEBUG] Player at " + pos);
+
+            // Extract values
             int[] values = new int[type.getValuesPerCell()];
             for (int i = 0; i < type.getValuesPerCell(); i++) {
                 values[i] = IntegerArgumentType.getInteger(ctx, type.getValueNames()[i]);
+                System.out.println("[PHYSICS DEBUG] Value " + i + " = " + values[i]);
             }
+
+            System.out.println("[PHYSICS DEBUG] About to call PhysicsThread.get().engine.seed()");
+            System.out.println("[PHYSICS DEBUG] PhysicsThread instance: " + PhysicsThread.get());
+            System.out.println("[PHYSICS DEBUG] Engine instance: " + PhysicsThread.get().engine);
 
             PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
 
-            // Build message showing names
+            System.out.println("[PHYSICS DEBUG] Seed call completed!");
+
+            // Build message
             StringBuilder valueStr = new StringBuilder();
             for (int i = 0; i < values.length; i++) {
                 valueStr.append(type.getValueNames()[i]).append("=").append(values[i]);
@@ -90,6 +101,8 @@ public class PhysicsDebugCommand {
             return 1;
 
         } catch (Exception e) {
+            System.out.println("[PHYSICS DEBUG] Exception in executeSeed: " + e);
+            e.printStackTrace();
             ctx.getSource().sendFailure(Component.literal("[VoxelPhysics] Must be a player."));
             return 0;
         }

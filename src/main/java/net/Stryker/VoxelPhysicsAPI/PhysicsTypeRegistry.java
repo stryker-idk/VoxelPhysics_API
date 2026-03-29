@@ -3,7 +3,6 @@ package net.Stryker.VoxelPhysicsAPI;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.IForgeRegistry;
 import net.minecraftforge.registries.RegistryBuilder;
 import net.minecraftforge.registries.RegistryObject;
 
@@ -17,17 +16,16 @@ public class PhysicsTypeRegistry {
     public static final ResourceLocation REGISTRY_KEY =
             ResourceLocation.fromNamespaceAndPath(VoxelPhysicsAPI.MOD_ID, "physics_types");
 
-    public static final DeferredRegister<PhysicsType> DEFERRED_REGISTER =
-            DeferredRegister.create(REGISTRY_KEY, VoxelPhysicsAPI.MOD_ID);
+    private static DeferredRegister<PhysicsType> deferredRegister;
 
     private static List<PhysicsType> values = new ArrayList<>();
     private static int count = 0;
     private static boolean frozen = false;
 
     public static void register(IEventBus modEventBus) {
-        DEFERRED_REGISTER.register(modEventBus);
-        // This creates the registry - no event listener needed
-        DEFERRED_REGISTER.makeRegistry(RegistryBuilder::new);
+        deferredRegister = DeferredRegister.create(REGISTRY_KEY, VoxelPhysicsAPI.MOD_ID);
+        deferredRegister.register(modEventBus);
+        deferredRegister.makeRegistry(RegistryBuilder::new);
     }
 
     /** Call this in FMLCommonSetupEvent */
@@ -35,8 +33,7 @@ public class PhysicsTypeRegistry {
         if (frozen) return;
 
         // Build from DeferredRegister's entries
-        values = new ArrayList<>();
-        for (RegistryObject<PhysicsType> ro : DEFERRED_REGISTER.getEntries()) {
+        for (RegistryObject<PhysicsType> ro : deferredRegister.getEntries()) {
             ro.ifPresent(values::add);
         }
 
@@ -49,16 +46,18 @@ public class PhysicsTypeRegistry {
         VoxelPhysicsAPI.LOGGER.info("VoxelPhysics API: Registered " + count + " physics types");
     }
 
-    public static RegistryObject<PhysicsType> register(String name, Supplier<PhysicsType> type) {
-        return DEFERRED_REGISTER.register(name, type);
+    // DEBUG: Add types after freeze for testing
+    public static void addDebugType(PhysicsType type) {
+        type.setOrdinal(values.size());
+        values.add(type);
+        count = values.size();
+        // Don't need to update frozen - it's already true
+        VoxelPhysicsAPI.LOGGER.info("Added debug type: " + type.getId() + " at ordinal " + type.ordinal());
     }
 
     public static PhysicsType byId(ResourceLocation id) {
-        // Try to get from RegistryObject if registry isn't fully accessible
-        for (RegistryObject<PhysicsType> ro : DEFERRED_REGISTER.getEntries()) {
-            if (ro.isPresent() && ro.get().getId().equals(id)) {
-                return ro.get();
-            }
+        for (PhysicsType type : values) {
+            if (type.getId().equals(id)) return type;
         }
         return null;
     }
@@ -68,6 +67,6 @@ public class PhysicsTypeRegistry {
     }
 
     public static int count() {
-        return frozen ? count : (int) DEFERRED_REGISTER.getEntries().size();
+        return count;
     }
 }

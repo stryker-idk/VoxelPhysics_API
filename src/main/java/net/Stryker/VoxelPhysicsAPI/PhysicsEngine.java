@@ -70,10 +70,14 @@ public class PhysicsEngine {
             );
         }
 
+        System.out.println("[PHYSICS DEBUG] Seeding " + type.getId() + " at " + x + "," + y + "," + z);
+
         boolean hasValue = false;
         for (int i = 0; i < values.length; i++) {
             if (values[i] > 0) {
                 seedQueue.add(new long[]{ pack(x, y, z), type.ordinal(), i, values[i] });
+                System.out.println("[PHYSICS DEBUG] Added to queue: type=" + type.ordinal() +
+                        ", value=" + values[i] + ", queue size now: " + seedQueue.size());
                 hasValue = true;
             }
         }
@@ -128,13 +132,25 @@ public class PhysicsEngine {
     }
 
     public void tick() {
+
+        //DEBUG
+        //System.out.println("[PHYSICS DEBUG] Tick! Queue size: " + seedQueue.size() +
+        //        ", Active: " + active + ", Types: " + current.length);
+
+        // Drain seeds (ONCE!)
         long[] seed;
+        int drained = 0;
         while ((seed = seedQueue.poll()) != null) {
             int typeIdx = (int) seed[1];
             int valueIdx = (int) seed[2];
             current[typeIdx][valueIdx].putMax(seed[0], (int) seed[3]);
             active = true;
             quietTicks = 0;
+            drained++;
+        }
+        
+        if (drained > 0) {
+            System.out.println("[PHYSICS DEBUG] Drained " + drained + " seeds");
         }
 
         if (!active) return;
