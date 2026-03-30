@@ -58,6 +58,9 @@ public final class LongIntMap {
         return false;
     }
 
+
+    
+    /** put only the new value, overrides the old value. */
     public void put(long key, int value) {
         if (size >= threshold) resize();
         int i = index(key);
@@ -69,7 +72,7 @@ public final class LongIntMap {
         values[i] = value;
     }
 
-    /** Put only if new value is greater than existing (max merge). */
+    /** put only if new value is greater than existing (max merge). */
     public void putMax(long key, int value) {
         if (size >= threshold) resize();
         int i = index(key);
@@ -84,6 +87,29 @@ public final class LongIntMap {
             if (value > values[i]) values[i] = value;
         }
     }
+
+    /** add to existing value (or set if not present) */
+    public void putAdd(long key, int delta) {
+        if (delta == 0) return;
+        if (size >= threshold) resize();
+
+        int i = index(key);
+        while (keys[i] != EMPTY_KEY && keys[i] != key) {
+            i = (i + 1) & mask;
+        }
+
+        if (keys [i] == EMPTY_KEY) {
+            // new entry
+            size++;
+            keys[i] = key;
+            values[i] = delta;
+        } else {
+            //add to existing
+            values[i] += delta;
+        }
+    }
+
+
 
     public void remove(long key) {
         int i = index(key);

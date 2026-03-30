@@ -19,7 +19,7 @@ public class PhysicsEngine {
 
     private static final int INITIAL_CAPACITY = 1 << 19;
 
-    // Initialized in constructor after registry is frozen
+    // initialized in constructor after registry is frozen
     private final LongIntMap[][] current;
     private final LongIntMap[][] next;
     private final LongIntMap[][] snapshotMaps;
@@ -137,7 +137,7 @@ public class PhysicsEngine {
         //System.out.println("[PHYSICS DEBUG] Tick! Queue size: " + seedQueue.size() +
         //        ", Active: " + active + ", Types: " + current.length);
 
-        // Drain seeds (ONCE!)
+        // drain seeds once
         long[] seed;
         int drained = 0;
         while ((seed = seedQueue.poll()) != null) {
