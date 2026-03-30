@@ -109,6 +109,17 @@ public final class LongIntMap {
         }
     }
 
+    public void merge(long key, int value, MergeBehavior behavior) {
+        switch (behavior) {
+            case PUT -> put(key, value);
+            case PUT_MAX -> putMax(key, value);
+            case ADD -> {
+                int current = get(key);
+                put(key, current + value);
+            }
+        }
+    }
+
 
 
     public void remove(long key) {

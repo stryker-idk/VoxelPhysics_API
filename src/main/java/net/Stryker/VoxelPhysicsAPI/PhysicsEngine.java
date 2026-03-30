@@ -184,23 +184,38 @@ public class PhysicsEngine {
     }
 
     public void tick() {
+        // 1. apply constant sources (fire n stuff)
+        if (!constantSources.isEmpty()) {
+            constantSources.forEach((type, sources) -> {
+                int typeIdx = type.ordinal();
+                LongIntMap[] typeCurrent = current[typeIdx];
+                MergeBehavior[] behaviors = type.getBehaviors();
 
-        //DEBUG
-        //System.out.println("[PHYSICS DEBUG] Tick! Queue size: " + seedQueue.size() +
-        //        ", Active: " + active + ", Types: " + current.length);
+                sources.forEach((key, values) -> {
+                    for (int i = 0; i < values.length; i++) {
+                        // Use the appropriate merge behavior for this value index
+                        typeCurrent[i].merge(key, values[i], behaviors[i]);
+                    }
+                });
 
-        // drain seeds once
-        long[] seed;
+                // Mark as active since we just added values
+                active = true;
+                quietTicks = 0;
+            });
+        }
+
+        // 2. "drain" sources (explosions n stuff)
+        long[] source; //SOURCE!? MY SOURCE IS THAT I MADE IT THE FUCK UP
         int drained = 0;
-        while ((seed = seedQueue.poll()) != null) {
-            int typeIdx = (int) seed[1];
-            int valueIdx = (int) seed[2];
-            current[typeIdx][valueIdx].putMax(seed[0], (int) seed[3]);
+        while ((source = seedQueue.poll()) != null) {
+            int typeIdx = (int) source[1];
+            int valueIdx = (int) source[2];
+            current[typeIdx][valueIdx].putMax(source[0], (int) source[3]);
             active = true;
             quietTicks = 0;
             drained++;
         }
-        
+
         if (drained > 0) {
             System.out.println("[PHYSICS DEBUG] Drained " + drained + " seeds");
         }
