@@ -4,7 +4,6 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
-import net.Stryker.VoxelPhysicsAPI.PhysicsEngine;
 import net.Stryker.VoxelPhysicsAPI.PhysicsThread;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType;
 import net.Stryker.VoxelPhysicsAPI.PhysicsTypeRegistry;
@@ -83,7 +82,7 @@ public class PhysicsDebugCommand {
             System.out.println("[PHYSICS DEBUG] PhysicsThread instance: " + PhysicsThread.get());
             System.out.println("[PHYSICS DEBUG] Engine instance: " + PhysicsThread.get().engine);
 
-            PhysicsThread.get().engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
+            PhysicsThread.get().engine.setSource(pos.getX(), pos.getY(), pos.getZ(), type, values);
 
             System.out.println("[PHYSICS DEBUG] Seed call completed!");
 

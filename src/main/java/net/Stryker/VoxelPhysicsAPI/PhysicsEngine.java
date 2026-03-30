@@ -1,5 +1,7 @@
 package net.Stryker.VoxelPhysicsAPI;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -62,7 +64,14 @@ public class PhysicsEngine {
         snapshot = new AtomicReference<>(snapshotMaps);
     }
 
-    public void seed(int x, int y, int z, PhysicsType type, int... values) {
+
+
+
+
+    /**
+     * Sets a Source of the give type and value at that engine tick, not constant (one time event, e.g., explosions).
+     */
+    public void setSource(int x, int y, int z, PhysicsType type, int... values) {
         if (values.length != type.getValuesPerCell()) {
             throw new IllegalArgumentException(
                     type.getId() + " requires exactly " + type.getValuesPerCell() +
@@ -88,6 +97,47 @@ public class PhysicsEngine {
         }
     }
 
+
+
+    private final Map<PhysicsType, ConcurrentHashMap<Long, int[]>> constantSources = new ConcurrentHashMap<>();
+
+    /**
+     * Sets a Constant Source of the give type and value at that engine tick (e.g., fire).
+     */
+    public void setConstantSource(int x, int y, int z, PhysicsType type, int... values) {
+        if (values.length != type.getValuesPerCell()) {
+            throw new IllegalArgumentException(
+                    type.getId() + " requires " + type.getValuesPerCell() + " values");
+        }
+        long key = pack(x, y, z);
+        constantSources.computeIfAbsent(type, t -> new ConcurrentHashMap<>())
+                .put(key, values.clone()); // Clone to prevent external modification
+    }
+
+    /**
+     * Removes a Constant Source of the give type and value at that engine tick (e.g., fire extinguishing).
+     */
+    public void removeConstantSource(int x, int y, int z, PhysicsType type) {
+        long key = pack(x, y, z);
+        Map<Long, int[]> sources = constantSources.get(type);
+        if (sources != null) {
+            sources.remove(key);
+            // Clean up empty maps to save memory
+            if (sources.isEmpty()) {
+                constantSources.remove(type);
+            }
+        }
+    }
+
+    /**
+     * Clears all constant sources of a specific type.
+     */
+    public void clearConstantSources(PhysicsType type) {
+        constantSources.remove(type);
+    }
+
+
+
     public void clear() {
         for (int i = 0; i < current.length; i++) {
             for (int v = 0; v < current[i].length; v++) {
@@ -100,6 +150,8 @@ public class PhysicsEngine {
         active = false;
         quietTicks = 0;
     }
+
+
 
     public LongIntMap getSnapshot(PhysicsType type, int valueIndex) {
         return snapshot.get()[type.ordinal()][valueIndex];

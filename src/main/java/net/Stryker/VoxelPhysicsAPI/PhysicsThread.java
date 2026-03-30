@@ -97,12 +97,12 @@ public class PhysicsThread {
 
     /** Seed a single-value type (e.g. PRESSURE). */
     public void seed(BlockPos pos, PhysicsType type, int... values) {
-        engine.seed(pos.getX(), pos.getY(), pos.getZ(), type, values);
+        engine.setSource(pos.getX(), pos.getY(), pos.getZ(), type, values);
     }
 
     /** Convenience for raw coordinates. */
     public void seed(int x, int y, int z, PhysicsType type, int... values) {
-        engine.seed(x, y, z, type, values);
+        engine.setSource(x, y, z, type, values);
     }
 
     public void clear() { engine.clear(); }
