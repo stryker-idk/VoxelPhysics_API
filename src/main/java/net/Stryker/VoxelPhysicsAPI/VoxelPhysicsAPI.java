@@ -1,6 +1,8 @@
 package net.Stryker.VoxelPhysicsAPI;
 
+import net.Stryker.VoxelPhysicsAPI.BlockPropertyType.BlockPropertyRegistry;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType.PhysicsTypeRegistry;
+import net.Stryker.VoxelPhysicsAPI.debug.DebugBlockPropertyTypes;
 import net.Stryker.VoxelPhysicsAPI.debug.DebugPhysicsTypes;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
@@ -30,6 +32,7 @@ public class VoxelPhysicsAPI {
 
         // DEBUG: Register a test type directly if registry is empty
         DebugPhysicsTypes.register();
+        DebugBlockPropertyTypes.register();
 
         LOGGER.info("VoxelPhysics API loaded. Registered types: " + PhysicsTypeRegistry.count());
 
@@ -38,5 +41,6 @@ public class VoxelPhysicsAPI {
 
         // Create engine AFTER we have types
         PhysicsThread.get().start();
+        BlockPropertyRegistry.freeze();
     }
 }

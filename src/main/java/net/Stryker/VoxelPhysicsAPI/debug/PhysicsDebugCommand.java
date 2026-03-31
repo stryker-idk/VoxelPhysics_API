@@ -5,17 +5,23 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import net.Stryker.VoxelPhysicsAPI.BlockPropertyType.BlockPropertyRegistry;
+import net.Stryker.VoxelPhysicsAPI.BlockPropertyType.BlockPropertyType;
 import net.Stryker.VoxelPhysicsAPI.PhysicsThread;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType.PhysicsType;
 import net.Stryker.VoxelPhysicsAPI.PhysicsType.PhysicsTypeRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.Block;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.registries.ForgeRegistries;
 
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class PhysicsDebugCommand {
@@ -56,6 +62,21 @@ public class PhysicsDebugCommand {
                         )
                         .then(Commands.literal("status")
                                 .executes(ctx -> status(ctx.getSource()))
+                        )
+                        .then(Commands.literal("property")
+                                .then(Commands.argument("block", ResourceLocationArgument.id())
+                                        .suggests((ctx, builder) -> {
+                                            // Suggest all registered blocks
+                                            for (ResourceLocation id : ForgeRegistries.BLOCKS.getKeys()) {
+                                                builder.suggest(id.toString());
+                                            }
+                                            return builder.buildFuture();
+                                        })
+                                        .executes(ctx -> debugProperty(
+                                                ctx.getSource(),
+                                                ResourceLocationArgument.getId(ctx, "block")
+                                        ))
+                                )
                         )
         );
     }
@@ -178,6 +199,27 @@ public class PhysicsDebugCommand {
                 sb.append(" ").append(label).append(": ").append(count).append("\n");
             }
         }
+        source.sendSuccess(() -> Component.literal(sb.toString()), false);
+        return 1;
+    }
+
+    private static int debugProperty(CommandSourceStack source, ResourceLocation blockId) {
+        Block block = ForgeRegistries.BLOCKS.getValue(blockId);
+        if (block == null) {
+            source.sendFailure(Component.literal("[VoxelPhysics] Unknown block: " + blockId));
+            return 0;
+        }
+
+        StringBuilder sb = new StringBuilder("[VoxelPhysics] Properties for " + blockId + ":\n");
+
+        for (BlockPropertyType type : BlockPropertyRegistry.getTypes()) {
+            int value = BlockPropertyRegistry.get(block, type);
+            boolean isDefault = !BlockPropertyRegistry.has(block, type);
+            sb.append(" ").append(type.getId().getPath())
+                    .append(": ").append(value)
+                    .append(isDefault ? " (default)\n" : "\n");
+        }
+
         source.sendSuccess(() -> Component.literal(sb.toString()), false);
         return 1;
     }
