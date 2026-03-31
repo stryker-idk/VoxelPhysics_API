@@ -137,7 +137,7 @@ public class PhysicsDebugCommand {
 
     /**
      *
-     * Clears all constant sources
+     * Clears all constant sources of a given type
      *
      * @param source
      * @param typeName

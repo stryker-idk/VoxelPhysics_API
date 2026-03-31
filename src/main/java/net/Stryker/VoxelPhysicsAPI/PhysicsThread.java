@@ -95,7 +95,7 @@ public class PhysicsThread {
     // Public API
     // -------------------------------------------------------------------------
 
-    //DEPRICATED, just do PhysicsThread.get().engine.
+    //DEPRECATED, just do PhysicsThread.get().engine.
 
     /** Seed a single-value type (e.g. PRESSURE). */
     //public void setSource(BlockPos pos, PhysicsType type, int... values) {
