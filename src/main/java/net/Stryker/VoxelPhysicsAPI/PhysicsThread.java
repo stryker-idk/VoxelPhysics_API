@@ -95,15 +95,17 @@ public class PhysicsThread {
     // Public API
     // -------------------------------------------------------------------------
 
+    //DEPRICATED, just do PhysicsThread.get().engine.
+
     /** Seed a single-value type (e.g. PRESSURE). */
-    public void seed(BlockPos pos, PhysicsType type, int... values) {
-        engine.setSource(pos.getX(), pos.getY(), pos.getZ(), type, values);
-    }
+    //public void setSource(BlockPos pos, PhysicsType type, int... values) {
+    //    engine.setSource(pos.getX(), pos.getY(), pos.getZ(), type, values);
+    //}
 
     /** Convenience for raw coordinates. */
-    public void seed(int x, int y, int z, PhysicsType type, int... values) {
-        engine.setSource(x, y, z, type, values);
-    }
+    //public void setSource(int x, int y, int z, PhysicsType type, int... values) {
+    //    engine.setSource(x, y, z, type, values);
+    //}
 
-    public void clear() { engine.clear(); }
+    //public void clear() { engine.clear(); }
 }
