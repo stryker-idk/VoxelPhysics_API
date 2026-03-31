@@ -1,5 +1,9 @@
 package net.Stryker.VoxelPhysicsAPI;
 
+import net.Stryker.VoxelPhysicsAPI.PhysicsType.MergeBehavior;
+import net.Stryker.VoxelPhysicsAPI.PhysicsType.PhysicsType;
+import net.Stryker.VoxelPhysicsAPI.PhysicsType.PhysicsTypeRegistry;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;

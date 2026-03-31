@@ -1,5 +1,7 @@
 package net.Stryker.VoxelPhysicsAPI;
 
+import net.Stryker.VoxelPhysicsAPI.PhysicsType.MergeBehavior;
+
 /**
  * A minimal open-addressing hash map from primitive long → primitive int.
  *

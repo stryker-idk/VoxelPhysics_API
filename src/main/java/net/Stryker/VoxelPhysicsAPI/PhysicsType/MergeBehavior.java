@@ -1,4 +1,4 @@
-package net.Stryker.VoxelPhysicsAPI;
+package net.Stryker.VoxelPhysicsAPI.PhysicsType;
 
 public enum MergeBehavior {
     PUT,      // Overwrite with new value

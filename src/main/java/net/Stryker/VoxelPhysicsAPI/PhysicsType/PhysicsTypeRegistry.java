@@ -1,5 +1,6 @@
-package net.Stryker.VoxelPhysicsAPI;
+package net.Stryker.VoxelPhysicsAPI.PhysicsType;
 
+import net.Stryker.VoxelPhysicsAPI.VoxelPhysicsAPI;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
@@ -9,7 +10,6 @@ import net.minecraftforge.registries.RegistryObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Supplier;
 
 public class PhysicsTypeRegistry {
 

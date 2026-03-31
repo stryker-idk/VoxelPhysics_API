@@ -1,6 +1,9 @@
 package net.Stryker.VoxelPhysicsAPI.debug;
 
 import net.Stryker.VoxelPhysicsAPI.*;
+import net.Stryker.VoxelPhysicsAPI.PhysicsType.MergeBehavior;
+import net.Stryker.VoxelPhysicsAPI.PhysicsType.PhysicsType;
+import net.Stryker.VoxelPhysicsAPI.PhysicsType.PhysicsTypeRegistry;
 import net.minecraft.resources.ResourceLocation;
 
 import static net.Stryker.VoxelPhysicsAPI.VoxelPhysicsAPI.MOD_ID;

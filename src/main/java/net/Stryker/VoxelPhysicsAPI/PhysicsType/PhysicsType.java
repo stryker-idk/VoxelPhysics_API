@@ -1,5 +1,6 @@
-package net.Stryker.VoxelPhysicsAPI;
+package net.Stryker.VoxelPhysicsAPI.PhysicsType;
 
+import net.Stryker.VoxelPhysicsAPI.IRuleset;
 import net.minecraft.resources.ResourceLocation;
 
 /**
