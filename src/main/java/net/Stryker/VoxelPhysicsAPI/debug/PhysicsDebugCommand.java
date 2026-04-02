@@ -32,11 +32,11 @@ public class PhysicsDebugCommand {
 
         // Build seed node with dynamic branches per type
         var setSourceNode = Commands.literal("setsource");
-        var constantSourceNode = Commands.literal("constantsource");
+        var constantSourceNode = Commands.literal("setconstantsource");
 
         for (PhysicsType type : PhysicsTypeRegistry.values()) {
             setSourceNode.then(buildTypeBranch(type, "setsource"));
-            constantSourceNode.then(buildTypeBranch(type, "constantsource"));
+            constantSourceNode.then(buildTypeBranch(type, "setconstantsource"));
         }
 
         dispatcher.register(
@@ -120,7 +120,7 @@ public class PhysicsDebugCommand {
             }
 
             final String msg;
-            if (commandType.equals("constantsource")) {
+            if (commandType.equals("setconstantsource")) {
                 PhysicsThread.get().engine.setConstantSource(pos.getX(), pos.getY(), pos.getZ(), type, values);
                 msg = "[VoxelPhysics] Constant source " + type.getId().getPath() + " (" + valueStr +
                         ") set at (" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";

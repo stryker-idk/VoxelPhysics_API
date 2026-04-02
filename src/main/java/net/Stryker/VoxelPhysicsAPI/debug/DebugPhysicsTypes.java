@@ -57,8 +57,8 @@ public class DebugPhysicsTypes {
                     }
                 },
                 1, // tick interval
-                new String[]{"test1", "test2"},
-                new MergeBehavior[]{MergeBehavior.ADD, MergeBehavior.PUT_MAX}
+                new String[]{"test1", "test2"}, //names of the values, single one would just be the name without the new String[]
+                new MergeBehavior[]{MergeBehavior.ADD, MergeBehavior.PUT_MAX} //behaviors of the 2 values, single value would just be MergeBehavior.ADD or whatever the behavior would be
         );
 
         PhysicsTypeRegistry.addDebugType(DEBUG_TYPE);
