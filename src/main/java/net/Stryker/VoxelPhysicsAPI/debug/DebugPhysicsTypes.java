@@ -61,6 +61,6 @@ public class DebugPhysicsTypes {
                 new MergeBehavior[]{MergeBehavior.ADD, MergeBehavior.PUT_MAX} //behaviors of the 2 values, single value would just be MergeBehavior.ADD or whatever the behavior would be
         );
 
-        PhysicsTypeRegistry.addDebugType(DEBUG_TYPE);
+        PhysicsTypeRegistry.registerType(DEBUG_TYPE);
     }
 }

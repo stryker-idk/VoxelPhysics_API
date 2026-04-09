@@ -47,12 +47,14 @@ public class PhysicsTypeRegistry {
     }
 
     // DEBUG: Add types after freeze for testing
-    public static void addDebugType(PhysicsType type) {
+    public static void registerType(PhysicsType type) {
+        if (frozen) {
+            throw new IllegalStateException("Cannot register type after freeze: " + type.getId());
+        }
+        // Add directly to values (like addDebugType but proper naming)
         type.setOrdinal(values.size());
         values.add(type);
         count = values.size();
-        // Don't need to update frozen - it's already true
-        VoxelPhysicsAPI.LOGGER.info("Added debug type: " + type.getId() + " at ordinal " + type.ordinal());
     }
 
     public static PhysicsType byId(ResourceLocation id) {

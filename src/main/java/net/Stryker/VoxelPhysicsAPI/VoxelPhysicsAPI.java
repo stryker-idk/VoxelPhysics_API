@@ -28,7 +28,6 @@ public class VoxelPhysicsAPI {
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
-        PhysicsTypeRegistry.freeze();
 
         // DEBUG: Register a test type directly if registry is empty
         DebugPhysicsTypes.register();
@@ -41,6 +40,8 @@ public class VoxelPhysicsAPI {
 
         // Create engine AFTER we have types
         PhysicsThread.get().start();
+
+        PhysicsTypeRegistry.freeze();
         BlockPropertyRegistry.freeze();
     }
 }
